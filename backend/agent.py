@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, TypedDict
 
-from backend.crm_tools import build_tool_registry, normalize_payload
+from .crm_tools import build_tool_registry, normalize_payload
 
 try:
     from langchain_openai import ChatOpenAI
@@ -21,7 +21,7 @@ class AgentState(TypedDict, total=False):
     user_input: str
     form_data: dict[str, Any]
     current_state: dict[str, Any]
-    matched_entry_id: int | None
+    matched_entry_id: str | int | None
     next_tool: str | None
     tool_input: dict[str, Any]
     last_tool_name: str | None

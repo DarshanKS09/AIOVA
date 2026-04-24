@@ -1,0 +1,11 @@
+# Vercel Build Configuration
+
+{
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "npm install && cd frontend && npm install",
+  "framework": "vite",
+  "env": [
+    "VITE_API_BASE_URL"
+  ]
+}

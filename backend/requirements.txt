@@ -1,7 +1,10 @@
 fastapi==0.115.12
 uvicorn[standard]==0.34.2
+gunicorn==21.2.0
 openai==1.76.0
 python-dateutil==2.9.0.post0
 langgraph==0.2.67
 langchain-core==0.3.59
 langchain-openai==0.2.14
+pymongo==4.6.1
+python-dotenv==1.0.0

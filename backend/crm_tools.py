@@ -8,7 +8,7 @@ from typing import Any
 
 from dateutil import parser as date_parser
 
-from backend.database import get_interaction, insert_interaction, list_interactions, update_interaction
+from .database import get_interaction, insert_interaction, list_interactions, update_interaction
 
 try:
     from langchain_openai import ChatOpenAI
