@@ -125,10 +125,10 @@ function App() {
         form_data: formData,
       });
 
-      if (response.data.status === "duplicate_detected") {
+      if (response.data.is_duplicate || response.data.status === "duplicate_detected") {
         setDuplicateState({
-          ...response.data.duplicate,
-          newEntry: formData,
+          ...(response.data.duplicate || {}),
+          newEntry: { ...formData },
         });
         pushAssistantMessage(
           response.data.message || "Duplicate detected. Choose Merge or Save as New.",

@@ -173,6 +173,7 @@ def llm_node(state: AgentState) -> dict[str, Any]:
                 return _response_step(
                     {
                         "status": "duplicate_detected",
+                        "is_duplicate": True,
                         "duplicate": last_observation,
                         "message": "Duplicate interaction detected. Do you want to merge or save as new?",
                     }

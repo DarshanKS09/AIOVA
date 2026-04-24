@@ -488,14 +488,14 @@ def heuristic_duplicate_check(new_entry: dict[str, str], existing_entries: list[
         reasons = []
         hcp_similarity = similarity_score(new_entry["hcp_name"], normalized_existing["hcp_name"])
         if hcp_similarity >= 0.9:
-            score += 35
+            score += 40
             reasons.append("doctor name is almost identical")
         elif hcp_similarity >= 0.75:
-            score += 25
+            score += 30
             reasons.append("doctor name is similar")
 
         if new_entry["date"] and normalized_existing["date"] and new_entry["date"] == normalized_existing["date"]:
-            score += 20
+            score += 25
             reasons.append("interaction date matches")
 
         minutes_apart = time_difference_minutes(new_entry["time"], normalized_existing["time"])
@@ -504,7 +504,7 @@ def heuristic_duplicate_check(new_entry: dict[str, str], existing_entries: list[
                 score += 20
                 reasons.append("interaction time is very close")
             elif minutes_apart <= 30:
-                score += 10
+                score += 15
                 reasons.append("interaction time is somewhat close")
 
         topics_score = topic_similarity(new_entry["topics"], normalized_existing["topics"])
@@ -526,13 +526,16 @@ def heuristic_duplicate_check(new_entry: dict[str, str], existing_entries: list[
     matched_record = normalize_with_metadata(existing_entries[best_index])
     confidence = max(0, min(100, best_score))
     name_anchor = similarity_score(new_entry["hcp_name"], matched_record["hcp_name"]) >= 0.75
+    date_anchor = bool(new_entry["date"] and matched_record["date"] and new_entry["date"] == matched_record["date"])
     topics_anchor = topic_similarity(new_entry["topics"], matched_record["topics"]) >= 0.4
     time_anchor = (
         (time_difference_minutes(new_entry["time"], matched_record["time"]) or 10**9) <= 30
         if new_entry["time"] and matched_record["time"]
         else False
     )
-    is_duplicate = confidence >= 60 and name_anchor and (time_anchor or topics_anchor)
+    is_duplicate = name_anchor and date_anchor and (time_anchor or topics_anchor)
+    if is_duplicate and confidence < 60:
+        confidence = 60
     return {
         "is_duplicate": is_duplicate,
         "confidence": confidence,
