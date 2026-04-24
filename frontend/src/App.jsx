@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import Form from "./components/Form";
 import Chat from "./components/Chat";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const ENTRIES_STORAGE_KEY = "aiova.savedEntries";
 
 const initialFormState = {
   hcp_name: "",
@@ -27,6 +28,28 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [duplicateState, setDuplicateState] = useState(null);
+
+  useEffect(() => {
+    try {
+      const savedEntries = window.localStorage.getItem(ENTRIES_STORAGE_KEY);
+      if (!savedEntries) {
+        return;
+      }
+
+      const parsedEntries = JSON.parse(savedEntries);
+      if (!Array.isArray(parsedEntries)) {
+        return;
+      }
+
+      setEntries(parsedEntries);
+    } catch {
+      window.localStorage.removeItem(ENTRIES_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(entries));
+  }, [entries]);
 
   const pushAssistantMessage = (content) => {
     setMessages((current) => [...current, { role: "assistant", content }]);

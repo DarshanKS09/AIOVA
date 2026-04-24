@@ -537,6 +537,33 @@ def clean_topic_value(value: str) -> str:
     return re.sub(r"^(topics?\s+(?:related\s+to|about|on)\s+)", "", value, flags=re.IGNORECASE).strip()
 
 
+def clean_materials_value(value: str) -> str:
+    cleaned = re.sub(
+        r"^(materials?\s+(?:related\s+to|about|on)\s+)",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned.rstrip(".")
+
+
+def split_topics_and_materials(text: str) -> tuple[str, str]:
+    topic_match = re.search(
+        r"(?:to\s+discuss|discuss|discussed|about|regarding)\s+(.+?)(?=\s+(?:and\s+)?(?:shared|sent|provided)\b|$)",
+        text,
+        re.IGNORECASE,
+    )
+    materials_match = re.search(
+        r"(?:shared|sent|provided)\s+(.+)",
+        text,
+        re.IGNORECASE,
+    )
+
+    topics = clean_topic_value(topic_match.group(1)) if topic_match else ""
+    materials = clean_materials_value(materials_match.group(1)) if materials_match else ""
+    return topics, materials
+
+
 def fallback_parse(text: str) -> Dict[str, str]:
     normalized = EXPECTED_FIELDS.copy()
 
@@ -569,9 +596,11 @@ def fallback_parse(text: str) -> Dict[str, str]:
         except (ValueError, TypeError, OverflowError):
             pass
 
-    topic_match = re.search(r"(?:discussed|about|regarding)\s+(.+)", text, re.IGNORECASE)
-    if topic_match:
-        normalized["topics"] = topic_match.group(1).strip().rstrip(".")
+    topics, materials = split_topics_and_materials(text)
+    if topics:
+        normalized["topics"] = topics
+    if materials:
+        normalized["materials"] = materials
 
     return normalized
 
