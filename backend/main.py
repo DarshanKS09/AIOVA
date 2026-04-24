@@ -44,6 +44,7 @@ class AgentInvokeRequest(BaseModel):
     form_data: Optional[dict[str, Any]] = None
     current_state: Optional[dict[str, Any]] = None
     matched_entry_id: Optional[str | int] = None
+    entry_id: Optional[str | int] = None
 
 
 app = FastAPI(
