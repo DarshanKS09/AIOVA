@@ -5,10 +5,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil import parser as date_parser
 
-from database import get_interaction, insert_interaction, list_interactions, update_interaction
+try:
+    from backend.database import get_interaction, insert_interaction, list_interactions, update_interaction
+except ImportError:  # pragma: no cover
+    from database import get_interaction, insert_interaction, list_interactions, update_interaction
 
 try:
     from langchain_openai import ChatOpenAI
@@ -29,9 +33,34 @@ EXPECTED_FIELDS = {
 INTERACTION_TYPES = {"Meeting", "Call", "Visit", "Other"}
 
 
+def get_reference_now() -> datetime:
+    timezone_name = os.getenv("APP_TIMEZONE", "Asia/Kolkata")
+    try:
+        return datetime.now(ZoneInfo(timezone_name))
+    except ZoneInfoNotFoundError:
+        return datetime.now()
+
+
+def parse_relative_day(value: str) -> str:
+    lowered = value.lower()
+    now = get_reference_now()
+
+    if re.search(r"\byesterday\b", lowered):
+        return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    if re.search(r"\btoday\b", lowered):
+        return now.strftime("%Y-%m-%d")
+    if re.search(r"\btomorrow\b", lowered):
+        return (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    return ""
+
+
 def normalize_date(value: str) -> str:
     if not value:
         return ""
+
+    relative_day = parse_relative_day(value)
+    if relative_day:
+        return relative_day
 
     relative_weekday = parse_relative_weekday(value)
     if relative_weekday:
@@ -73,7 +102,7 @@ def parse_relative_weekday(value: str) -> str:
         "saturday": 5,
         "sunday": 6,
     }
-    today = datetime.now()
+    today = get_reference_now()
     current_weekday = today.weekday()
     target_weekday = weekday_map[weekday_name]
 
@@ -278,8 +307,12 @@ def fallback_parse(text: str) -> dict[str, str]:
     else:
         normalized["interaction_type"] = "Other"
 
+    relative_day = parse_relative_day(text)
     relative_weekday = parse_relative_weekday(text)
-    if relative_weekday:
+    if relative_day:
+        normalized["date"] = relative_day
+        normalized["time"] = normalize_time(text)
+    elif relative_weekday:
         normalized["date"] = relative_weekday
         normalized["time"] = normalize_time(text)
     else:
@@ -663,7 +696,9 @@ class MergeInteractionTool:
     name: str = "MergeInteractionTool"
 
     def run(self, payload: dict[str, Any]) -> dict[str, Any]:
-        existing_id = int(payload.get("existing_id"))
+        existing_id = payload.get("existing_id")
+        if existing_id in (None, ""):
+            raise ValueError("Existing interaction ID is required.")
         existing = get_interaction(existing_id)
         if existing is None:
             raise ValueError("Existing interaction not found.")

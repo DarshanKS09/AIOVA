@@ -6,8 +6,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from agent import invoke_agent
-from database import init_db
+try:
+    from backend.agent import invoke_agent
+    from backend.database import init_db
+except ImportError:  # pragma: no cover
+    from agent import invoke_agent
+    from database import init_db
 
 # Logging configuration
 logging.basicConfig(

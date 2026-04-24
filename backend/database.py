@@ -67,6 +67,9 @@ def _serialize_document(doc: dict[str, Any] | None) -> dict[str, Any] | None:
     doc_copy = doc.copy()
     if "_id" in doc_copy:
         doc_copy["id"] = str(doc_copy.pop("_id"))
+    for key, value in list(doc_copy.items()):
+        if isinstance(value, datetime):
+            doc_copy[key] = value.isoformat()
     return doc_copy
 
 
