@@ -4,7 +4,6 @@ import Form from "./components/Form";
 import Chat from "./components/Chat";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-const ENTRIES_STORAGE_KEY = "aiova.savedEntries";
 
 const initialFormState = {
   hcp_name: "",
@@ -29,43 +28,29 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [duplicateState, setDuplicateState] = useState(null);
 
-  useEffect(() => {
-    try {
-      const savedEntries = window.localStorage.getItem(ENTRIES_STORAGE_KEY);
-      if (!savedEntries) {
-        return;
-      }
-
-      const parsedEntries = JSON.parse(savedEntries);
-      if (!Array.isArray(parsedEntries)) {
-        return;
-      }
-
-      setEntries(parsedEntries);
-    } catch {
-      window.localStorage.removeItem(ENTRIES_STORAGE_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(entries));
-  }, [entries]);
-
   const pushAssistantMessage = (content) => {
     setMessages((current) => [...current, { role: "assistant", content }]);
   };
+
+  useEffect(() => {
+    const loadEntries = async () => {
+      try {
+        const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+          action: "list_entries",
+        });
+        setEntries(response.data.entries || []);
+      } catch {
+        pushAssistantMessage("I couldn't load saved interactions from the database.");
+      }
+    };
+
+    loadEntries();
+  }, []);
 
   const handleFieldChange = (field, value) => {
     setFormData((current) => ({
       ...current,
       [field]: value,
-    }));
-  };
-
-  const mergeParsedFields = (parsedFields) => {
-    setFormData((current) => ({
-      ...current,
-      ...parsedFields,
     }));
   };
 
@@ -79,64 +64,70 @@ function App() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/parse`, {
-        text: trimmedText,
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "process_message",
+        user_input: trimmedText,
         current_state: formData,
       });
 
-      const parsedFields = response.data;
-      mergeParsedFields(parsedFields);
-      const hasUpdates = Object.keys(parsedFields).length > 0;
+      if (response.data.form_data) {
+        setFormData((current) => ({
+          ...current,
+          ...response.data.form_data,
+        }));
+      }
 
       pushAssistantMessage(
-        hasUpdates
-          ? "Form updated from your message. You can keep refining anything on the left."
-          : "I understood the message, but it did not change any form fields.",
+        response.data.message || "Form updated from your message. You can keep refining anything on the left.",
       );
     } catch (error) {
       pushAssistantMessage(
-        error.response?.data?.detail || "I couldn't parse that message right now. Please try again.",
+        error.response?.data?.detail || "I couldn't process that message right now. Please try again.",
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveAsNewEntry = (entry) => {
-    const savedEntry = {
-      id: Date.now(),
-      ...entry,
-    };
-    setEntries((current) => [savedEntry, ...current]);
-    setDuplicateState(null);
-    pushAssistantMessage("Interaction saved as a new entry.");
+  const applyAgentSaveResponse = (responseData) => {
+    if (responseData.entries) {
+      setEntries(responseData.entries);
+    }
+    if (responseData.entry) {
+      setFormData((current) => ({
+        ...current,
+        ...responseData.entry,
+      }));
+    }
+    if (responseData.message) {
+      pushAssistantMessage(responseData.message);
+    }
   };
 
   const handleSaveEntry = async () => {
     setIsSaving(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/check-duplicate`, {
-        new_entry: formData,
-        existing_entries: entries.map(({ id, ...entry }) => entry),
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "save_entry",
+        form_data: formData,
       });
 
-      const result = response.data;
-      if (result.is_duplicate && result.matched_index !== null) {
+      if (response.data.status === "duplicate_detected") {
         setDuplicateState({
-          ...result,
+          ...response.data.duplicate,
           newEntry: formData,
         });
         pushAssistantMessage(
-          `Similar interaction found (${result.confidence}% match). Choose Merge or Create New.`,
+          response.data.message || "Duplicate detected. Choose Merge or Save as New.",
         );
         return;
       }
 
-      saveAsNewEntry(formData);
+      applyAgentSaveResponse(response.data);
     } catch (error) {
       pushAssistantMessage(
-        error.response?.data?.detail || "I couldn't check for duplicates right now. Please try again.",
+        error.response?.data?.detail || "I couldn't save the interaction right now.",
       );
     } finally {
       setIsSaving(false);
@@ -144,47 +135,53 @@ function App() {
   };
 
   const handleMergeDuplicate = async () => {
-    if (!duplicateState || duplicateState.matched_index === null) {
+    if (!duplicateState?.matched_record?.id) {
       return;
     }
 
     setIsSaving(true);
-
     try {
-      const matchedEntry = entries[duplicateState.matched_index];
-      const { id, ...existingPayload } = matchedEntry;
-      const response = await axios.post(`${API_BASE_URL}/merge-entry`, {
-        existing: existingPayload,
-        new: duplicateState.newEntry,
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "merge_entry",
+        matched_entry_id: duplicateState.matched_record.id,
+        form_data: duplicateState.newEntry,
       });
-
-      const mergedEntry = response.data;
-      setEntries((current) =>
-        current.map((entry, index) =>
-          index === duplicateState.matched_index ? { ...entry, ...mergedEntry } : entry,
-        ),
-      );
-      setFormData((current) => ({
-        ...current,
-        ...mergedEntry,
-      }));
       setDuplicateState(null);
-      pushAssistantMessage("The duplicate interaction was merged successfully.");
+      applyAgentSaveResponse(response.data);
     } catch (error) {
       pushAssistantMessage(
-        error.response?.data?.detail || "I couldn't merge the duplicate entry right now.",
+        error.response?.data?.detail || "I couldn't merge the duplicate interaction right now.",
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleKeepSeparate = () => {
+  const handleSaveAsNew = async () => {
     if (!duplicateState) {
       return;
     }
 
-    saveAsNewEntry(duplicateState.newEntry);
+    setIsSaving(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "save_new_entry",
+        form_data: duplicateState.newEntry,
+      });
+      setDuplicateState(null);
+      applyAgentSaveResponse(response.data);
+    } catch (error) {
+      pushAssistantMessage(
+        error.response?.data?.detail || "I couldn't save the interaction as a new record right now.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    setDuplicateState(null);
+    pushAssistantMessage("Duplicate save cancelled. You can keep editing before saving.");
   };
 
   return (
@@ -208,15 +205,15 @@ function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">
           <div className="w-full max-w-md rounded-[18px] border border-amber-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
             <div className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
-              Potential Duplicate
+              Duplicate detected
             </div>
             <h2 className="mt-4 text-xl font-semibold text-slate-800">
-              Similar interaction found ({duplicateState.confidence}% match)
+              Duplicate interaction detected ({duplicateState.confidence}% match)
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{duplicateState.reason}</p>
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              Do you want to merge this interaction with the existing entry, or keep it as a new
-              record?
+              Do you want to merge this interaction with the saved record, save it as a new record,
+              or cancel?
             </p>
 
             <div className="mt-6 flex gap-3">
@@ -230,11 +227,19 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={handleKeepSeparate}
+                onClick={handleSaveAsNew}
                 className="inline-flex flex-1 items-center justify-center rounded-[12px] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                 disabled={isSaving}
               >
-                Create New
+                Save New
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelDuplicate}
+                className="inline-flex flex-1 items-center justify-center rounded-[12px] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                disabled={isSaving}
+              >
+                Cancel
               </button>
             </div>
           </div>
