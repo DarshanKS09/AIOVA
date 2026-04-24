@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, TypedDict
 
 try:
@@ -16,6 +17,17 @@ from langgraph.graph import END, START, StateGraph
 
 
 TOOLS = build_tool_registry()
+
+
+def is_follow_up_request(text: str) -> bool:
+    lowered = (text or "").strip().lower()
+    patterns = [
+        r"\bsuggest\s+(a\s+)?follow[\s-]?up\b",
+        r"\bfollow[\s-]?up\s+(suggestion|suggestions|steps|actions)\b",
+        r"\bwhat\s+(should|do)\s+(i|we)\s+do\s+next\b",
+        r"\bnext\s+steps\b",
+    ]
+    return any(re.search(pattern, lowered) for pattern in patterns)
 
 
 class AgentState(TypedDict, total=False):
@@ -118,6 +130,12 @@ def llm_node(state: AgentState) -> dict[str, Any]:
     if action == "process_message":
         current_state = normalize_payload(state.get("current_state", {}) or {})
         if not last_tool_name:
+            if is_follow_up_request(state.get("user_input", "")):
+                return _tool_step(
+                    "FollowUpSuggestionTool",
+                    {"entry": state.get("current_state", {}) or {}},
+                    "Generating follow-up suggestions from the current interaction.",
+                )
             if any(current_state.values()):
                 return _tool_step(
                     "EditInteractionTool",
@@ -134,6 +152,14 @@ def llm_node(state: AgentState) -> dict[str, Any]:
                     "text": state.get("user_input", ""),
                 },
                 "Extracting a new interaction draft.",
+            )
+
+        if last_tool_name == "FollowUpSuggestionTool":
+            return _response_step(
+                {
+                    "status": "follow_up_suggested",
+                    "message": last_observation.get("message", "Insufficient data to suggest follow-up."),
+                }
             )
 
         form_data = normalize_payload(last_observation.get("form_data", {}) or {})

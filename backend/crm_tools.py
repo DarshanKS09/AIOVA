@@ -588,29 +588,63 @@ def heuristic_merge_records(existing: dict[str, Any], new: dict[str, Any]) -> di
 
 def heuristic_follow_up(entry: dict[str, Any]) -> dict[str, str]:
     topics = str(entry.get("topics", "") or "").strip()
+    interaction_type = str(entry.get("interaction_type", "") or "").strip()
+    hcp_name = str(entry.get("hcp_name", "") or "").strip()
+    date = str(entry.get("date", "") or "").strip()
+    time = str(entry.get("time", "") or "").strip()
     lowered = topics.lower()
+
+    has_context = any([topics, interaction_type, hcp_name, date, time])
+    if not has_context:
+        return {
+            "sentiment": "",
+            "outcomes": "",
+            "follow_up_actions": "",
+            "message": "Insufficient data to suggest follow-up.",
+        }
+
     sentiment = "Neutral"
     if any(token in lowered for token in ["positive", "interested", "good", "strong", "supportive"]):
         sentiment = "Positive"
     elif any(token in lowered for token in ["concern", "risk", "issue", "negative", "problem"]):
         sentiment = "Negative"
 
-    follow_up = "Send a follow-up summary and confirm next steps."
+    follow_up_steps = [
+        "Send a follow-up summary and confirm next steps.",
+        "Schedule the next touchpoint and confirm availability.",
+    ]
     outcomes = "Follow-up pending."
     if "pricing" in lowered:
-        follow_up = "Share pricing summary and confirm budget questions."
+        follow_up_steps = [
+            "Share a pricing summary tailored to the discussion.",
+            "Confirm any budget questions or approval blockers.",
+            "Schedule a short follow-up call to review pricing options.",
+        ]
         outcomes = "Pricing discussion captured."
     elif "efficacy" in lowered or "clinical" in lowered:
-        follow_up = "Send clinical evidence and schedule a scientific follow-up."
+        follow_up_steps = [
+            "Send the most relevant clinical evidence discussed.",
+            "Offer a scientific follow-up meeting for deeper review.",
+            "Capture any unanswered efficacy questions for the next call.",
+        ]
         outcomes = "Clinical discussion captured."
     elif topics:
-        follow_up = f"Send a recap covering {topics}."
+        follow_up_steps = [
+            f"Send a recap covering {topics}.",
+            "Confirm whether any supporting material should be shared next.",
+            "Set a follow-up check-in to continue the discussion.",
+        ]
         outcomes = f"Discussed {topics}."
+
+    context_bits = [bit for bit in [hcp_name, interaction_type, date, time] if bit]
+    context_line = f" for {', '.join(context_bits)}" if context_bits else ""
+    message = "\n".join(f"- {step}" for step in follow_up_steps[:3])
 
     return {
         "sentiment": sentiment,
         "outcomes": outcomes,
-        "follow_up_actions": follow_up,
+        "follow_up_actions": "; ".join(follow_up_steps[:3]),
+        "message": f"Suggested follow-up{context_line}:\n{message}",
     }
 
 
