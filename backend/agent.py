@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, TypedDict
 
-from .crm_tools import build_tool_registry, normalize_payload
+from crm_tools import build_tool_registry, normalize_payload
 
 try:
     from langchain_openai import ChatOpenAI
