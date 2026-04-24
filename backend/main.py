@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .agent import invoke_agent
+from agent import invoke_agent
 from .database import init_db
 
 # Logging configuration
