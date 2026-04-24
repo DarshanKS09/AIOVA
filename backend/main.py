@@ -2,6 +2,7 @@ import json
 import os
 import re
 from difflib import SequenceMatcher
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from dateutil import parser as date_parser
@@ -132,6 +133,11 @@ def clean_response(content: str) -> str:
 def normalize_date(value: str) -> str:
     if not value:
         return ""
+
+    relative_weekday = parse_relative_weekday(value)
+    if relative_weekday:
+        return relative_weekday
+
     try:
         parsed = date_parser.parse(value, fuzzy=True)
         return parsed.strftime("%Y-%m-%d")
@@ -166,6 +172,47 @@ def normalize_hcp_name(value: str) -> str:
     return " ".join(parts)
 
 
+def parse_relative_weekday(value: str) -> str:
+    match = re.search(
+        r"\b(this|next|last)\s+"
+        r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        return ""
+
+    modifier = match.group(1).lower()
+    weekday_name = match.group(2).lower()
+    weekday_map = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+
+    today = datetime.now()
+    current_weekday = today.weekday()
+    target_weekday = weekday_map[weekday_name]
+
+    if modifier == "this":
+        start_of_week = today - timedelta(days=current_weekday)
+        target_date = start_of_week + timedelta(days=target_weekday)
+    elif modifier == "next":
+        days_ahead = (target_weekday - current_weekday) % 7
+        days_ahead = 7 if days_ahead == 0 else days_ahead
+        target_date = today + timedelta(days=days_ahead)
+    else:
+        days_back = (current_weekday - target_weekday) % 7
+        days_back = 7 if days_back == 0 else days_back
+        target_date = today - timedelta(days=days_back)
+
+    return target_date.strftime("%Y-%m-%d")
+
+
 def normalize_person_name(title: str, name: str) -> str:
     normalized_name = " ".join(part.capitalize() for part in name.split() if part)
     normalized_title = title.strip().lower().rstrip(".")
@@ -191,6 +238,9 @@ def extract_people(text: str) -> list[str]:
     people = []
     seen = set()
     stopwords = {
+        "this",
+        "next",
+        "last",
         "i",
         "and",
         "at",
@@ -506,13 +556,18 @@ def fallback_parse(text: str) -> Dict[str, str]:
     else:
         normalized["interaction_type"] = "Other"
 
-    try:
-        parsed = date_parser.parse(text, fuzzy=True)
-        normalized["date"] = parsed.strftime("%Y-%m-%d")
-        if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", lowered) or re.search(r"\b\d{1,2}:\d{2}\b", lowered):
-            normalized["time"] = parsed.strftime("%H:%M")
-    except (ValueError, TypeError, OverflowError):
-        pass
+    relative_weekday = parse_relative_weekday(text)
+    if relative_weekday:
+        normalized["date"] = relative_weekday
+        normalized["time"] = normalize_time(text)
+    else:
+        try:
+            parsed = date_parser.parse(text, fuzzy=True)
+            normalized["date"] = parsed.strftime("%Y-%m-%d")
+            if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", lowered) or re.search(r"\b\d{1,2}:\d{2}\b", lowered):
+                normalized["time"] = parsed.strftime("%H:%M")
+        except (ValueError, TypeError, OverflowError):
+            pass
 
     topic_match = re.search(r"(?:discussed|about|regarding)\s+(.+)", text, re.IGNORECASE)
     if topic_match:
