@@ -3,21 +3,49 @@ const interactionOptions = ["Meeting", "Call", "Visit", "Other"];
 const fieldClassName =
   "w-full rounded-[10px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
 
-function Form({ formData, onFieldChange, onSaveEntry, entries, isSaving }) {
+function Form({
+  formData,
+  onFieldChange,
+  onSaveEntry,
+  onEditEntry,
+  onDeleteEntry,
+  onResetForm,
+  entries,
+  editingEntryId,
+  isSaving,
+}) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-5 md:px-6">
-        <h1 className="text-[22px] font-semibold tracking-tight text-slate-800">
-          Log HCP Interaction
-        </h1>
-        <button
-          type="button"
-          onClick={onSaveEntry}
-          className="inline-flex items-center justify-center rounded-[12px] bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSaving}
-        >
-          {isSaving ? "Checking..." : "Save Entry"}
-        </button>
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-slate-800">
+            Log HCP Interaction
+          </h1>
+          {editingEntryId ? (
+            <p className="mt-1 text-sm text-slate-500">Editing a saved interaction</p>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {editingEntryId ? (
+            <button
+              type="button"
+              onClick={onResetForm}
+              className="inline-flex items-center justify-center rounded-[12px] border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              New Entry
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={onSaveEntry}
+            className="inline-flex items-center justify-center rounded-[12px] bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving}
+          >
+            {isSaving ? "Saving..." : editingEntryId ? "Update Entry" : "Save Entry"}
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
@@ -154,7 +182,11 @@ function Form({ formData, onFieldChange, onSaveEntry, entries, isSaving }) {
                 {entries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="rounded-[12px] border border-slate-200 bg-slate-50/80 px-4 py-4"
+                    className={`rounded-[12px] border px-4 py-4 ${
+                      editingEntryId === entry.id
+                        ? "border-blue-200 bg-blue-50/70"
+                        : "border-slate-200 bg-slate-50/80"
+                    }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-800">
@@ -164,12 +196,31 @@ function Form({ formData, onFieldChange, onSaveEntry, entries, isSaving }) {
                         {[entry.date, entry.time].filter(Boolean).join(" • ") || "No date/time"}
                       </span>
                     </div>
+
                     <p className="mt-1 text-sm text-slate-600">
                       {entry.topics || entry.materials || "No summary available."}
                     </p>
+
                     {entry.attendees ? (
                       <p className="mt-2 text-xs text-slate-500">Attendees: {entry.attendees}</p>
                     ) : null}
+
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEditEntry(entry.id)}
+                        className="inline-flex items-center justify-center rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteEntry(entry.id)}
+                        className="inline-flex items-center justify-center rounded-[10px] border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

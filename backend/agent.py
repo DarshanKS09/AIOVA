@@ -25,6 +25,7 @@ class AgentState(TypedDict, total=False):
     form_data: dict[str, Any]
     current_state: dict[str, Any]
     matched_entry_id: str | int | None
+    entry_id: str | int | None
     next_tool: str | None
     tool_input: dict[str, Any]
     last_tool_name: str | None
@@ -144,6 +145,22 @@ def llm_node(state: AgentState) -> dict[str, Any]:
             }
         )
 
+    if action == "load_entry":
+        if not last_tool_name:
+            return _tool_step(
+                "LogInteractionTool",
+                {"operation": "load", "entry_id": state.get("entry_id")},
+                "Loading the saved interaction into the form.",
+            )
+        return _response_step(
+            {
+                "status": "loaded",
+                "entry": last_observation.get("entry", {}),
+                "form_data": last_observation.get("entry", {}),
+                "message": "Saved interaction loaded into the form.",
+            }
+        )
+
     if action == "save_entry":
         if not last_tool_name:
             return _tool_step(
@@ -201,6 +218,48 @@ def llm_node(state: AgentState) -> dict[str, Any]:
                 "entry": last_observation.get("entry", {}),
                 "entries": last_observation.get("entries", []),
                 "message": "Interaction saved as a new record.",
+            }
+        )
+
+    if action == "update_entry":
+        if not last_tool_name:
+            return _tool_step(
+                "FollowUpSuggestionTool",
+                {"entry": state.get("form_data", {}) or {}},
+                "Refreshing follow-up suggestions before updating the interaction.",
+            )
+        if last_tool_name == "FollowUpSuggestionTool":
+            entry = {**normalize_payload(state.get("form_data", {}) or {}), **last_observation}
+            return _tool_step(
+                "LogInteractionTool",
+                {
+                    "operation": "update",
+                    "entry_id": state.get("entry_id"),
+                    "entry": entry,
+                },
+                "Updating the saved interaction.",
+            )
+        return _response_step(
+            {
+                "status": "updated",
+                "entry": last_observation.get("entry", {}),
+                "entries": last_observation.get("entries", []),
+                "message": "Saved interaction updated successfully.",
+            }
+        )
+
+    if action == "delete_entry":
+        if not last_tool_name:
+            return _tool_step(
+                "LogInteractionTool",
+                {"operation": "delete", "entry_id": state.get("entry_id")},
+                "Deleting the saved interaction.",
+            )
+        return _response_step(
+            {
+                "status": "deleted",
+                "entries": last_observation.get("entries", []),
+                "message": "Saved interaction deleted.",
             }
         )
 
@@ -262,6 +321,7 @@ def invoke_agent(payload: dict[str, Any]) -> dict[str, Any]:
         "form_data": payload.get("form_data", {}) or {},
         "current_state": payload.get("current_state", {}) or {},
         "matched_entry_id": payload.get("matched_entry_id"),
+        "entry_id": payload.get("entry_id"),
         "response": {},
     }
     result = agent_graph.invoke(initial_state)

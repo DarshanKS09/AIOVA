@@ -10,9 +10,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dateutil import parser as date_parser
 
 try:
-    from backend.database import get_interaction, insert_interaction, list_interactions, update_interaction
+    from backend.database import (
+        delete_interaction,
+        get_interaction,
+        insert_interaction,
+        list_interactions,
+        update_interaction,
+    )
 except ImportError:  # pragma: no cover
-    from database import get_interaction, insert_interaction, list_interactions, update_interaction
+    from database import delete_interaction, get_interaction, insert_interaction, list_interactions, update_interaction
 
 try:
     from langchain_openai import ChatOpenAI
@@ -650,6 +656,15 @@ class LogInteractionTool:
         if operation == "list":
             return {"entries": list_interactions()}
 
+        if operation == "load":
+            entry_id = payload.get("entry_id")
+            if entry_id in (None, ""):
+                raise ValueError("Entry ID is required.")
+            entry = get_interaction(entry_id)
+            if entry is None:
+                raise ValueError("Saved interaction not found.")
+            return {"entry": entry}
+
         if operation == "save":
             entry = {
                 **normalize_payload(payload.get("entry", {})),
@@ -659,6 +674,28 @@ class LogInteractionTool:
             }
             saved_entry = insert_interaction(entry)
             return {"entry": saved_entry, "entries": list_interactions()}
+
+        if operation == "update":
+            entry_id = payload.get("entry_id")
+            if entry_id in (None, ""):
+                raise ValueError("Entry ID is required.")
+            entry = {
+                **normalize_payload(payload.get("entry", {})),
+                "sentiment": str(payload.get("entry", {}).get("sentiment", "") or "").strip(),
+                "outcomes": str(payload.get("entry", {}).get("outcomes", "") or "").strip(),
+                "follow_up_actions": str(payload.get("entry", {}).get("follow_up_actions", "") or "").strip(),
+            }
+            updated_entry = update_interaction(entry_id, entry)
+            return {"entry": updated_entry, "entries": list_interactions()}
+
+        if operation == "delete":
+            entry_id = payload.get("entry_id")
+            if entry_id in (None, ""):
+                raise ValueError("Entry ID is required.")
+            was_deleted = delete_interaction(entry_id)
+            if not was_deleted:
+                raise ValueError("Saved interaction not found.")
+            return {"deleted": True, "entries": list_interactions()}
 
         text = str(payload.get("text", "") or "")
         extracted = llm_extract(text)

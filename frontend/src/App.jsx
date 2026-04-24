@@ -18,6 +18,7 @@ const initialFormState = {
 function App() {
   const [formData, setFormData] = useState(initialFormState);
   const [entries, setEntries] = useState([]);
+  const [editingEntryId, setEditingEntryId] = useState(null);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -108,6 +109,17 @@ function App() {
     setIsSaving(true);
 
     try {
+      if (editingEntryId) {
+        const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+          action: "update_entry",
+          entry_id: editingEntryId,
+          form_data: formData,
+        });
+        applyAgentSaveResponse(response.data);
+        setEditingEntryId(null);
+        return;
+      }
+
       const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
         action: "save_entry",
         form_data: formData,
@@ -184,6 +196,59 @@ function App() {
     pushAssistantMessage("Duplicate save cancelled. You can keep editing before saving.");
   };
 
+  const handleEditEntry = async (entryId) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "load_entry",
+        entry_id: entryId,
+      });
+      if (response.data.form_data) {
+        setFormData((current) => ({
+          ...current,
+          ...response.data.form_data,
+        }));
+      }
+      setEditingEntryId(entryId);
+      pushAssistantMessage(
+        response.data.message || "Saved interaction loaded into the form for editing.",
+      );
+    } catch (error) {
+      pushAssistantMessage(
+        error.response?.data?.detail || "I couldn't load that saved interaction right now.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteEntry = async (entryId) => {
+    setIsSaving(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/agent/invoke`, {
+        action: "delete_entry",
+        entry_id: entryId,
+      });
+      if (editingEntryId === entryId) {
+        setEditingEntryId(null);
+        setFormData(initialFormState);
+      }
+      applyAgentSaveResponse(response.data);
+    } catch (error) {
+      pushAssistantMessage(
+        error.response?.data?.detail || "I couldn't delete that saved interaction right now.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetForm = () => {
+    setFormData(initialFormState);
+    setEditingEntryId(null);
+    pushAssistantMessage("The form is ready for a new interaction.");
+  };
+
   return (
     <main className="min-h-screen bg-[#f3f4f6] px-4 py-5 md:px-6">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-[1400px] flex-col gap-5 xl:flex-row">
@@ -192,7 +257,11 @@ function App() {
             formData={formData}
             onFieldChange={handleFieldChange}
             onSaveEntry={handleSaveEntry}
+            onEditEntry={handleEditEntry}
+            onDeleteEntry={handleDeleteEntry}
+            onResetForm={handleResetForm}
             entries={entries}
+            editingEntryId={editingEntryId}
             isSaving={isSaving}
           />
         </section>
