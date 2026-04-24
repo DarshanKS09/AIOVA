@@ -191,6 +191,7 @@ def extract_people(text: str) -> list[str]:
     people = []
     seen = set()
     stopwords = {
+        "i",
         "and",
         "at",
         "on",
@@ -401,15 +402,17 @@ def heuristic_duplicate_check(
 
         hcp_similarity = similarity_score(new_entry["hcp_name"], normalized_existing["hcp_name"])
         if hcp_similarity >= 0.9:
-            score += 45
+            score += 35
             reasons.append("doctor name is almost identical")
         elif hcp_similarity >= 0.75:
-            score += 30
+            score += 25
             reasons.append("doctor name is similar")
+        elif new_entry["hcp_name"] and normalized_existing["hcp_name"]:
+            reasons.append("doctor name is different")
 
         if new_entry["date"] and normalized_existing["date"]:
             if new_entry["date"] == normalized_existing["date"]:
-                score += 30
+                score += 20
                 reasons.append("interaction date matches")
 
         minutes_apart = time_difference_minutes(new_entry["time"], normalized_existing["time"])
@@ -435,7 +438,19 @@ def heuristic_duplicate_check(
             best_reason = ", ".join(reasons) if reasons else "No close interaction found."
 
     confidence = max(0, min(100, best_score if best_score > 0 else 0))
-    is_duplicate = confidence >= 60
+    matched_entry = (
+        normalize_payload(existing_entries[best_index])
+        if best_index is not None and 0 <= best_index < len(existing_entries)
+        else EXPECTED_FIELDS.copy()
+    )
+    name_anchor = similarity_score(new_entry["hcp_name"], matched_entry["hcp_name"]) >= 0.75
+    topics_anchor = topic_similarity(new_entry["topics"], matched_entry["topics"]) >= 0.4
+    time_anchor = (
+        (time_difference_minutes(new_entry["time"], matched_entry["time"]) or 10**9) <= 30
+        if new_entry["time"] and matched_entry["time"]
+        else False
+    )
+    is_duplicate = confidence >= 60 and name_anchor and (time_anchor or topics_anchor)
     return DuplicateCheckResult(
         is_duplicate=is_duplicate,
         confidence=confidence,
@@ -572,10 +587,30 @@ def fallback_edit(text: str, current_state: Dict[str, str]) -> Dict[str, str]:
         ],
     )
     mentioned_people = extract_people(text)
-    if not attendees_value and mentioned_people and re.search(r"\b(add|include|also)\b", lowered):
-        attendees_value = ", ".join(mentioned_people)
+    current_hcp = current_state.get("hcp_name", "").strip().lower()
+    mentioned_attendees = [
+        person for person in mentioned_people if person.strip().lower() != current_hcp
+    ]
+
+    is_attendee_replace = bool(
+        re.search(r"\b(change|update|set)\s+attendees?\b", lowered)
+    )
+    is_attendee_add = bool(
+        re.search(r"\b(add|include|also|along with|met)\b", lowered)
+    )
+
+    if not attendees_value and mentioned_attendees and is_attendee_add:
+        attendees_value = ", ".join(mentioned_attendees)
     if attendees_value:
-        if re.search(r"\b(add|include)\b", lowered):
+        attendees_value = ", ".join(
+            person for person in split_items(attendees_value) if person.lower() != current_hcp
+        )
+        if not attendees_value:
+            return normalize_partial_payload(updates)
+
+        if is_attendee_replace:
+            updates["attendees"] = attendees_value
+        elif is_attendee_add or mentioned_attendees:
             updates["attendees"] = merge_text_values(current_state.get("attendees", ""), attendees_value)
         else:
             updates["attendees"] = attendees_value
