@@ -357,9 +357,9 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f3f4f6] px-4 py-5 md:px-6">
-      <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-[1400px] flex-col gap-5 xl:flex-row">
-        <section className="min-h-[720px] w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:w-[66%]">
+    <main className="min-h-screen bg-[#f3f4f6] px-4 py-5 md:px-6 xl:h-screen xl:overflow-hidden">
+      <div className="mx-auto flex max-w-[1400px] flex-col gap-5 xl:h-[calc(100vh-2.5rem)] xl:flex-row xl:items-start">
+        <section className="w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:h-full xl:w-[68%]">
           <Form
             formData={formData}
             onFieldChange={handleFieldChange}
@@ -372,7 +372,7 @@ function App() {
             isSaving={isSaving}
           />
         </section>
-        <section className="min-h-[720px] w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:w-[34%]">
+        <section className="w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:w-[32%] xl:self-start">
           <Chat messages={messages} isLoading={isLoading} onSendMessage={handleSendMessage} />
         </section>
       </div>
