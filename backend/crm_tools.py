@@ -127,6 +127,15 @@ def parse_relative_weekday(value: str) -> str:
     return target_date.strftime("%Y-%m-%d")
 
 
+def parse_iso_date(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
 def normalize_hcp_name(value: str) -> str:
     if not value:
         return ""
@@ -567,6 +576,21 @@ def normalize_with_metadata(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def determine_follow_up_date(meeting_date: str, sentiment: str) -> str:
+    parsed_meeting_date = parse_iso_date(meeting_date)
+    if not parsed_meeting_date:
+        return ""
+
+    days_by_sentiment = {
+        "positive": 2,
+        "neutral": 4,
+        "negative": 1,
+    }
+    days_to_add = days_by_sentiment.get((sentiment or "").strip().lower(), 2)
+    follow_up_date = parsed_meeting_date + timedelta(days=days_to_add)
+    return follow_up_date.strftime("%Y-%m-%d")
+
+
 def heuristic_merge_records(existing: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     existing_payload = normalize_with_metadata(existing)
     new_payload = normalize_with_metadata(new)
@@ -603,11 +627,14 @@ def heuristic_follow_up(entry: dict[str, Any]) -> dict[str, str]:
             "message": "Insufficient data to suggest follow-up.",
         }
 
+    detected_sentiment = ""
     sentiment = "Neutral"
     if any(token in lowered for token in ["positive", "interested", "good", "strong", "supportive"]):
         sentiment = "Positive"
+        detected_sentiment = sentiment
     elif any(token in lowered for token in ["concern", "risk", "issue", "negative", "problem"]):
         sentiment = "Negative"
+        detected_sentiment = sentiment
 
     follow_up_steps = [
         "Send a follow-up summary and confirm next steps.",
@@ -636,15 +663,30 @@ def heuristic_follow_up(entry: dict[str, Any]) -> dict[str, str]:
         ]
         outcomes = f"Discussed {topics}."
 
-    context_bits = [bit for bit in [hcp_name, interaction_type, date, time] if bit]
+    follow_up_date = determine_follow_up_date(date, detected_sentiment or "Positive")
+    scheduled_date_note = ""
+    if follow_up_date:
+        follow_up_steps = [
+            f"Reach out on {follow_up_date} with a concise follow-up summary.",
+            *follow_up_steps,
+        ]
+        outcomes = f"{outcomes.rstrip('.')} Follow-up planned for {follow_up_date}."
+        scheduled_date_note = f" on {follow_up_date}"
+
+    context_bits = [bit for bit in [hcp_name, interaction_type, date] if bit]
     context_line = f" for {', '.join(context_bits)}" if context_bits else ""
+    if time:
+        context_line = f"{context_line} at {time}" if context_line else f" at {time}"
     message = "\n".join(f"- {step}" for step in follow_up_steps[:3])
+
+    if follow_up_date and follow_up_date == date:
+        raise ValueError("Follow-up date calculation produced the same date as the interaction date.")
 
     return {
         "sentiment": sentiment,
         "outcomes": outcomes,
         "follow_up_actions": "; ".join(follow_up_steps[:3]),
-        "message": f"Suggested follow-up{context_line}:\n{message}",
+        "message": f"Suggested follow-up{context_line}{scheduled_date_note}:\n{message}",
     }
 
 
