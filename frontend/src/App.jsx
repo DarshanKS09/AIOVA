@@ -372,7 +372,7 @@ function App() {
             isSaving={isSaving}
           />
         </section>
-        <section className="w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:w-[32%] xl:self-start">
+        <section className="w-full overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)] xl:h-full xl:w-[32%]">
           <Chat messages={messages} isLoading={isLoading} onSendMessage={handleSendMessage} />
         </section>
       </div>

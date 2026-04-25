@@ -142,7 +142,7 @@ function Chat({ messages, isLoading, onSendMessage }) {
         : "Click the microphone to speak";
 
   return (
-    <div className="flex h-full flex-col bg-white text-slate-800">
+    <div className="flex h-full min-h-[720px] flex-col bg-white text-slate-800 xl:min-h-0">
       <div className="border-b border-slate-200 px-5 py-5 md:px-6">
         <div className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">
           <span
@@ -172,7 +172,7 @@ function Chat({ messages, isLoading, onSendMessage }) {
         <p className="mt-2 text-sm text-slate-500">Log interaction details here via chat</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-slate-50 px-5 py-6 md:px-6">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 md:px-6">
         <div className="mb-4 rounded-[12px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <p className="text-sm font-medium text-slate-700">{voiceLabel}</p>
           {voicePreview ? (
@@ -180,8 +180,10 @@ function Chat({ messages, isLoading, onSendMessage }) {
           ) : null}
           {voiceError ? <p className="mt-1 text-sm text-rose-600">{voiceError}</p> : null}
         </div>
+      </div>
 
-        <div className="space-y-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-5 md:px-6">
+        <div className="space-y-3">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
 
@@ -207,7 +209,10 @@ function Chat({ messages, isLoading, onSendMessage }) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-5 md:p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="border-t border-slate-200 bg-white p-5 md:p-6"
+      >
         <div className="flex items-end gap-3">
           <button
             type="button"
@@ -226,7 +231,7 @@ function Chat({ messages, isLoading, onSendMessage }) {
             {voiceState === "processing" ? "..." : "Mic"}
           </button>
           <textarea
-            className="min-h-[52px] w-full resize-none rounded-[12px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            className="min-h-[52px] max-h-[104px] w-full resize-none rounded-[12px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             placeholder="Describe Interaction..."
             value={input}
             onChange={(event) => setInput(event.target.value)}
